@@ -1,72 +1,49 @@
-%pip install ipywidgets
-import ipywidgets as widgets
-from IPython.display import display, clear_output
-import datetime
-import threading
+import streamlit as st
+from datetime import datetime
 import time
 
-# List to store tasks
-tasks = []
+# Initialize session state for tasks
+if 'tasks' not in st.session_state:
+    st.session_state.tasks = []
 
-# Function to update the task display
-def update_task_display():
-    clear_output(wait=True)
-    display(input_box, time_picker, add_button)
-    for i, task in enumerate(tasks):
-        task_box = widgets.HBox([
-            widgets.Label(f"{task['description']} at {task['time']}"),
-            task['progress'],
-            task['complete_button']
-        ])
-        display(task_box)
+# Title
+st.title("📝 To-Do List with Reminders")
 
-# Function to celebrate completion
-def celebrate():
-    print("🎉 Task Completed! Great job! 🎉")
+# Task input form
+with st.form("task_form", clear_on_submit=True):
+    task_desc = st.text_input("Task Description")
+    task_time = st.time_input("Time to start the task")
+    submitted = st.form_submit_button("Add Task")
+    if submitted and task_desc:
+        st.session_state.tasks.append({
+            "desc": task_desc,
+            "time": task_time.strftime("%H:%M"),
+            "done": False,
+            "notified": False
+        })
 
-# Function to check alarms
-def alarm_checker():
-    while True:
-        now = datetime.datetime.now().strftime("%H:%M")
-        for task in tasks:
-            if task['time'] == now and not task['notified']:
-                print(f"⏰ Reminder: Time to start '{task['description']}'!")
-                task['notified'] = True
-        time.sleep(30)
+# Show tasks
+st.subheader("Your Tasks")
 
-# Start the alarm checker in the background
-threading.Thread(target=alarm_checker, daemon=True).start()
+if not st.session_state.tasks:
+    st.info("No tasks added yet.")
+else:
+    current_time = datetime.now().strftime("%H:%M")
+    for i, task in enumerate(st.session_state.tasks):
+        col1, col2, col3 = st.columns([4, 2, 2])
+        with col1:
+            status = "✅" if task["done"] else "⏳"
+            st.write(f"{status} **{task['desc']}** at {task['time']}")
+        with col2:
+            if not task["done"]:
+                if st.button(f"Mark Done {i}"):
+                    st.session_state.tasks[i]["done"] = True
+                    st.balloons()
+        with col3:
+            # Check if it's time for reminder
+            if not task["notified"] and not task["done"] and task["time"] == current_time:
+                st.warning(f"⏰ It's time to start: {task['desc']}")
+                st.session_state.tasks[i]["notified"] = True
 
-# UI components
-input_box = widgets.Text(placeholder='Enter your task...')
-time_picker = widgets.Text(placeholder='HH:MM')
-add_button = widgets.Button(description="Add Task")
-
-# Add button click handler
-def on_add_clicked(b):
-    description = input_box.value
-    time_slot = time_picker.value
-    progress = widgets.FloatProgress(value=0, min=0, max=100)
-    complete_button = widgets.Button(description="Complete")
-    task = {
-        'description': description,
-        'time': time_slot,
-        'progress': progress,
-        'complete_button': complete_button,
-        'notified': False
-    }
-
-    def on_complete_clicked(c):
-        task['progress'].value = 100
-        celebrate()
-
-    complete_button.on_click(on_complete_clicked)
-    tasks.append(task)
-    input_box.value = ''
-    time_picker.value = ''
-    update_task_display()
-
-add_button.on_click(on_add_clicked)
-
-# Initial display
-update_task_display()
+# Auto-refresh every 30 seconds to keep time-checks alive
+st.experimental_rerun()
